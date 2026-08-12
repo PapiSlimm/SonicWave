@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+*.db
+*.sqlite
+*.log
+uploads/
+_to_delete/
+ecosystem-inbox.jsonl
+rmpm-ecosystem-inbox.jsonl
+rmpm-campaigns.jsonl
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: sonicwave_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm ci
+      # Typecheck is BLOCKING (the sibling repos set continue-on-error — don't).
+      - run: npm run typecheck
+      - run: npm run migrate
+        env: { DATABASE_URL: postgres://postgres:postgres@localhost:5432/sonicwave_test }
+      # Unit + integration tests (includes the real ffmpeg render + webhook idempotency).
+      - run: npm test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/sonicwave_test
+          REDIS_URL: redis://localhost:6379
+      # Smoke test: server must boot in production mode and require auth.
+      - run: npm run test:smoke
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/sonicwave_test
+          REDIS_URL: redis://localhost:6379
+          STRIPE_SECRET_KEY: sk_test_dummy
+          STRIPE_WEBHOOK_SECRET: whsec_dummy
+          STORAGE_BUCKET: test-bucket
+          CORS_ORIGINS: https://app.v12.com
+
+  build-image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t sonicwave:${{ github.sha }} .
