@@ -28,6 +28,7 @@ import { initCollaborationGateway } from "./realtime/wsServer.ts";
 import { handleStripeEvent } from "./billing/webhookHandler.ts";
 import { createRenderWorker, type StoragePort } from "./audio/renderWorker.ts";
 import { createFeedIntake } from "./ecosystem/v12-feed-intake.ts";
+import { createMusicGen } from "./ai/musicGen.ts";
 
 const config = loadConfig(process.env); // THROWS if misconfigured — intended.
 
@@ -73,6 +74,17 @@ async function main() {
   app.use("/api/ecosystem/feed", createFeedIntake({ serviceId: "sonicwave" }));
 
   app.use(express.json());
+
+  // AI track generation (MiniMax Music 3.0) - generated clips land straight in
+  // the project timeline. Gated on MINIMAX_API_KEY; 503 with clear message if unset.
+  const musicAuthz = makeProjectAuthz(db);
+  app.use(createMusicGen({
+    db,
+    verifyToken: async (t) => { const d = await admin.auth().verifyIdToken(t); return { uid: d.uid, email: d.email }; },
+    getProjectOwner: musicAuthz.getProjectOwner,
+    isCollaborator: musicAuthz.isCollaborator,
+    logger,
+  }));
 
   // Exact-origin CORS (no wildcard in prod — enforced by config).
   app.use((req, res, next) => {
