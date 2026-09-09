@@ -22,8 +22,13 @@ export async function createDb(databaseUrl: string): Promise<Db> {
     connectionString: databaseUrl,
     max: 10,
     idleTimeoutMillis: 30_000,
-    // In production require real TLS (do NOT use rejectUnauthorized:false).
-    ssl: databaseUrl.includes("localhost") ? undefined : { rejectUnauthorized: true },
+    // TLS policy (2026-09): private-network hosts (Cloud SQL private IP /
+    // localhost) connect without TLS - the VPC encrypts transit and Cloud SQL's
+    // server cert is not publicly trusted, so forcing strict TLS fails every
+    // query. Public hosts still require real TLS (never rejectUnauthorized:false).
+    ssl: /@(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(databaseUrl)
+      ? undefined
+      : { rejectUnauthorized: true },
   });
   return {
     query: (text, params) => pool.query(text, params as any[]) as any,
