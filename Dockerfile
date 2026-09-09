@@ -1,14 +1,18 @@
 # Multi-stage build — fixes the sibling projects' "npm ci --only=production
 # triggers a build with no devDeps" unbuildable-image bug, and includes ffmpeg
 # (the render worker requires it; the original assumed it was present).
+#
+# 2026-09: npm ci -> npm install (the dependency set was completed in
+# package.json without a machine to regenerate the lockfile; install resolves
+# fresh and is what the proven sandbox build used).
 
 # ---- Stage 1: build ----
 FROM node:22-slim AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci                         # full install incl. devDeps
+COPY package.json ./
+RUN npm install
 COPY . .
-RUN npm run build                  # bundles client (vite) + server (esbuild)
+RUN npm run build
 
 # ---- Stage 2: runtime ----
 FROM node:22-slim AS runtime
@@ -17,8 +21,8 @@ ENV NODE_ENV=production
 # ffmpeg for audio rendering.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-COPY package*.json ./
-RUN npm ci --omit=dev              # prod-only deps, NO build step here
+COPY package.json ./
+RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 # Cloud Run injects PORT; the app reads process.env.PORT (see src/config).

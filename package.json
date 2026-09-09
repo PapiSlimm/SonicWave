@@ -10,7 +10,8 @@
     "test": "tsx --test tests/*.test.ts",
     "test:smoke": "tsx --test tests/smoke.test.ts",
     "typecheck": "tsc -p tsconfig.pure.json",
-    "migrate": "node -e \"console.log('run: psql $DATABASE_URL -f migrations/001_init.sql')\""
+    "migrate": "node -e \"console.log('run: psql $DATABASE_URL -f migrations/001_init.sql')\"",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs"
   },
   "keywords": [],
   "author": "",
@@ -18,12 +19,21 @@
   "type": "module",
   "dependencies": {
     "express": "^5.2.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "socket.io": "^4.8.1",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "ioredis": "^5.4.1",
+    "firebase-admin": "^13.0.1",
+    "stripe": "^17.4.0",
+    "bullmq": "^5.34.2",
+    "pg": "^8.13.1",
+    "yjs": "^13.6.20"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "esbuild": "^0.24.0"
   }
 }
