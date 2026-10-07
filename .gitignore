@@ -14,3 +14,7 @@ rmpm-campaigns.jsonl
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Scripts that may contain real secrets — never commit these
+set-env-vars.cmd
+run-migrations.cmd

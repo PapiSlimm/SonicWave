@@ -1,0 +1,62 @@
+# render.yaml — SonicWave deployment on Render.com
+# Commit this file to the PapiSlimm/SonicWave repo.
+# Render auto-detects it and creates/updates the service on push.
+
+services:
+  - type: web
+    name: sonicwave
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: starter
+    branch: main
+    healthCheckPath: /health/ready
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render injects PORT automatically; app reads process.env.PORT
+      # DATABASE_URL linked from the Render Postgres instance below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sonicwave-pg
+          property: connectionString
+
+      # REDIS_URL linked from the Render Redis instance below
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: sonicwave-redis
+          property: connectionString
+
+      # Set these manually in the Render dashboard (do not commit real keys)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: gen-lang-client-0237733980
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: MINIMAX_API_KEY
+        sync: false
+      - key: MIGRATE_SECRET
+        sync: false
+
+databases:
+  - name: sonicwave-pg
+    plan: starter
+    databaseName: sonicwave
+    user: sonicwave
+
+  - name: sonicwave-redis
+    plan: starter
