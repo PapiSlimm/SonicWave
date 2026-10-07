@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { v4 as uuidv4 } from "uuid";
 import Busboy from "busboy";
-import { Storage } from "@google-cloud/storage";
+import { S3Storage } from "../storage/s3.js";
 import { pool, applyStatePatch, makeProjectAuthz } from "../db/pg.js";
 import { authenticate } from "../middleware/auth.js";
 import { logger } from "../lib/logger.js";
@@ -11,11 +11,18 @@ import { audioQueue, aiQueue } from "../lib/queues.js";
 
 const r: Router = Router();
 
-// ─── Upload Policy ────────────────────────────────────────────────────────────
-// BUG-01 / BUG-02 FIX:
-//   Old code: audio-only MIME allowlist blocked video/mp4, images, etc. (415).
-//   Fix: Broad per-type policy with per-type size caps + prefix fallback.
+// ─── S3-compatible storage (AWS S3, Cloudflare R2, MinIO) ────────────────────
+const s3 = new S3Storage({
+  bucket:          process.env.STORAGE_BUCKET       ?? "",
+  region:          process.env.AWS_REGION            ?? "us-east-1",
+  accessKeyId:     process.env.AWS_ACCESS_KEY_ID     ?? "",
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
+  endpointUrl:     process.env.AWS_ENDPOINT_URL,
+  publicBaseUrl:   process.env.STORAGE_PUBLIC_URL,
+  signedUrlTtlSecs: 3600,
+});
 
+// ─── Upload Policy ────────────────────────────────────────────────────────────
 interface UploadPolicy { maxBytes: number; label: string; }
 
 const UPLOAD_POLICIES: Record<string, UploadPolicy> = {
@@ -126,9 +133,6 @@ r.get("/api/projects/:id", authenticate, async (req: Request, res: Response) => 
   }
 });
 
-// BUG-03 FIX:
-//   Global express.json({ limit: "2mb" }) in server.ts caused 413 on large saves.
-//   Route-level middleware here overrides it with 50 MB for project PATCH.
 r.patch(
   "/api/projects/:id",
   express.json({ limit: "50mb" }),
@@ -209,11 +213,7 @@ r.post("/api/projects/:id/remix", authenticate, async (req: Request, res: Respon
 });
 
 // ─── Media Upload ─────────────────────────────────────────────────────────────
-// BUG-01 / BUG-02 FIX: Accepts all video, audio, image, document, archive types.
-// Streams to GCS — no disk temp files.
-
-const gcs    = new Storage();
-const BUCKET = process.env.GCS_BUCKET ?? "sonicwave-media";
+// Streams directly to S3-compatible storage — no disk temp files.
 
 r.post("/api/upload", authenticate, (req: Request, res: Response) => {
   const contentType = req.headers["content-type"] ?? "";
@@ -230,29 +230,32 @@ r.post("/api/upload", authenticate, (req: Request, res: Response) => {
         if (!responded) { responded = true; res.status(415).json({ error: "unsupported_media_type", mimeType }); }
         return;
       }
-      const objectName  = `uploads/${uuidv4()}-${filename}`;
-      const writeStream = gcs.bucket(BUCKET).file(objectName).createWriteStream({
-        metadata: { contentType: mimeType }, resumable: false,
-      });
+      const objectName = `uploads/${uuidv4()}-${filename}`;
+      const { stream: s3Stream, done } = s3.createUploadStream(objectName, mimeType);
+
       let bytes = 0;
       stream.on("data", (chunk: Buffer) => {
         bytes += chunk.length;
         if (bytes > policy.maxBytes) {
-          stream.destroy(); writeStream.destroy();
+          stream.destroy();
+          s3Stream.destroy();
           if (!responded) { responded = true; res.status(413).json({ error: "file_too_large", maxBytes: policy.maxBytes }); }
         }
       });
-      stream.pipe(writeStream);
-      writeStream.on("finish", () => {
-        if (!responded) {
-          responded = true;
-          res.json({ fileUrl: `https://storage.googleapis.com/${BUCKET}/${objectName}`, fileName: filename, mimeType, label: policy.label, objectName });
-        }
-      });
-      writeStream.on("error", (err: Error) => {
-        logger.error({ err }, "GCS write error");
-        if (!responded) { responded = true; res.status(500).json({ error: "upload_failed" }); }
-      });
+
+      stream.pipe(s3Stream);
+
+      done
+        .then((fileUrl) => {
+          if (!responded) {
+            responded = true;
+            res.json({ fileUrl, fileName: filename, mimeType, label: policy.label, objectName });
+          }
+        })
+        .catch((err: Error) => {
+          logger.error({ err }, "S3 multipart upload error");
+          if (!responded) { responded = true; res.status(500).json({ error: "upload_failed" }); }
+        });
     });
 
     bb.on("finish", () => {
@@ -265,26 +268,31 @@ r.post("/api/upload", authenticate, (req: Request, res: Response) => {
   // Raw binary upload
   const policy = getUploadPolicy(contentType);
   if (!policy) return res.status(415).json({ error: "unsupported_media_type", contentType });
-  const filename    = (req.headers["x-file-name"] as string) ?? "upload";
-  const objectName  = `uploads/${uuidv4()}-${filename}`;
-  const writeStream = gcs.bucket(BUCKET).file(objectName).createWriteStream({ metadata: { contentType }, resumable: true });
+  const filename   = (req.headers["x-file-name"] as string) ?? "upload";
+  const objectName = `uploads/${uuidv4()}-${filename}`;
+  const { stream: s3Stream, done } = s3.createUploadStream(objectName, contentType);
+
   let bytes = 0;
   req.on("data", (chunk: Buffer) => {
     bytes += chunk.length;
     if (bytes > policy.maxBytes) {
-      req.destroy(); writeStream.destroy();
+      req.destroy();
+      s3Stream.destroy();
       if (!res.headersSent) res.status(413).json({ error: "file_too_large", maxBytes: policy.maxBytes });
     }
   });
-  req.pipe(writeStream);
-  writeStream.on("finish", () => {
-    if (!res.headersSent)
-      res.json({ fileUrl: `https://storage.googleapis.com/${BUCKET}/${objectName}`, fileName: filename, mimeType: contentType, label: policy.label, objectName });
-  });
-  writeStream.on("error", (err: Error) => {
-    logger.error({ err }, "GCS write error (raw)");
-    if (!res.headersSent) res.status(500).json({ error: "upload_failed" });
-  });
+
+  req.pipe(s3Stream);
+
+  done
+    .then((fileUrl) => {
+      if (!res.headersSent)
+        res.json({ fileUrl, fileName: filename, mimeType: contentType, label: policy.label, objectName });
+    })
+    .catch((err: Error) => {
+      logger.error({ err }, "S3 raw upload error");
+      if (!res.headersSent) res.status(500).json({ error: "upload_failed" });
+    });
 });
 
 // ─── Job Queues ──────────────────────────────────────────────────────────────
@@ -397,9 +405,6 @@ r.post(
 );
 
 // ─── Admin: Run Migrations ────────────────────────────────────────────────────
-// BUG-04 FIX:
-//   Old code hardcoded filenames ("001_init", "002_ai_tracks") — broke if
-//   files had different names. Fix: dynamic readdirSync prefix scan.
 
 const MIGRATE_SECRET = process.env.MIGRATE_SECRET;
 

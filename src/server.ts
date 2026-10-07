@@ -1,33 +1,8 @@
 /**
  * SonicWave — production server bootstrap.
  *
- * All REST routes are now wired in via createRoutes() (src/http/routes.ts).
- * The architecture matches the rest of the codebase: dependencies injected,
- * fail-closed config, no hardcoded secrets.
- *
- * Routes live:
- *   POST   /api/webhooks/stripe           — Stripe webhook (raw body, sig verified)
- *   POST/GET /api/ecosystem/feed/*        — V12 ecosystem event intake
- *   GET    /api/projects                  — list caller's projects
- *   POST   /api/projects                  — create project
- *   GET    /api/projects/:id              — fetch project (owner/collaborator)
- *   PATCH  /api/projects/:id              — update state (optimistic concurrency)
- *   DELETE /api/projects/:id              — delete (owner only)
- *   GET    /api/public/projects/:id       — public project (no auth)
- *   POST   /api/projects/:id/remix        — fork a public project
- *   POST   /api/projects/:id/collaborators— add collaborator (owner only)
- *   POST   /api/render/start              — enqueue cloud render (CREATOR+)
- *   GET    /api/render/status/:jobId      — poll render progress
- *   GET    /api/billing/plan              — current plan
- *   POST   /api/billing/create-checkout   — Stripe checkout session
- *   GET    /api/billing/portal            — Stripe customer portal
- *   POST   /api/upload                    — upload audio to GCS (100 MB max)
- *   GET    /api/ecosystem/ping            — V12 ecosystem health check
- *   POST   /api/auth/exchange-v12-token   — cross-app token exchange
- *   POST   /api/ai/generate-track         — MiniMax Music 3.0 AI generation
- *   GET    /api/ai/audio/:id              — stream generated audio
- *   GET    /health/live                   — liveness probe
- *   GET    /health/ready                  — readiness probe (DB + Redis)
+ * Storage: S3-compatible via createS3StorageFromEnv() — works with AWS S3,
+ * Cloudflare R2 (set AWS_ENDPOINT_URL), or MinIO. No GCS dependency.
  */
 import express from "express";
 import { createServer } from "http";
@@ -45,7 +20,8 @@ import { checkReady, checkLive } from "./http/health.ts";
 import { createRoutes } from "./http/routes.ts";
 import { initCollaborationGateway } from "./realtime/wsServer.ts";
 import { handleStripeEvent } from "./billing/webhookHandler.ts";
-import { createRenderWorker, type StoragePort } from "./audio/renderWorker.ts";
+import { createRenderWorker } from "./audio/renderWorker.ts";
+import { createS3StorageFromEnv } from "./storage/s3.ts";
 import { createFeedIntake } from "./ecosystem/v12-feed-intake.ts";
 import { createMusicGen } from "./ai/musicGen.ts";
 
@@ -53,7 +29,6 @@ const config = loadConfig(process.env); // THROWS if misconfigured — intended.
 
 async function main() {
   const db       = await createDb(config.databaseUrl!);
-  // Schema self-applies at boot - migrations/*.sql, once each, loudly on failure.
   await runMigrations(db);
   const redis    = new IORedis(config.redisUrl!, { maxRetriesPerRequest: null });
   const subRedis = redis.duplicate();
@@ -119,8 +94,6 @@ async function main() {
 
   app.use(express.json({ limit: "2mb" }));
 
-  // ── Root route — identifies the API so Cloud Run health checks + browsers ──
-  // get a proper response instead of "Cannot GET /"
   app.get("/", (_req, res) => res.json({
     service:  "SonicWave API",
     version:  process.env.npm_package_version ?? "1.0.0",
@@ -135,16 +108,14 @@ async function main() {
     res.status(r.status).json(r.body);
   });
 
+  // ── S3-compatible storage ───────────────────────────────────────────────────
+  // Reads: STORAGE_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+  // Optional: AWS_ENDPOINT_URL (R2/MinIO), STORAGE_PUBLIC_URL (CDN prefix)
+  const storage = createS3StorageFromEnv();
+
   // ── All REST routes ─────────────────────────────────────────────────────────
   const audioQueue = new Queue("audio-processing", { connection: redis });
-
-  const storage: StoragePort = {
-    fetchToLocal: async (src) => src,           // TODO: download from GCS to tmp
-    upload: async (_local, key) =>              // TODO: real GCS upload + signed URL
-      `https://storage.googleapis.com/${config.storageBucket}/${key}`,
-  };
-
-  const authz = makeProjectAuthz(db);
+  const authz      = makeProjectAuthz(db);
 
   app.use(createRoutes({
     db,
@@ -166,7 +137,7 @@ async function main() {
     logger,
   }));
 
-  // ── Socket.IO: authenticated, authorized, Redis-adapted, multi-instance ─────
+  // ── Socket.IO ───────────────────────────────────────────────────────────────
   const io = new Server(httpServer, {
     cors: { origin: config.corsOrigins, methods: ["GET", "POST"], credentials: true },
   });
@@ -212,6 +183,7 @@ async function main() {
       routes:   "all wired",
       stripe:   !!stripe,
       minimax:  !!(process.env.MINIMAX_API_KEY && process.env.MINIMAX_API_KEY !== "PENDING"),
+      storage:  "s3-compatible",
       corsOrigins: config.corsOrigins,
     }, "Service ready");
   });
