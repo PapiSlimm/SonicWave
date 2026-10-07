@@ -25,8 +25,17 @@ const RAW = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
 
-  // Object storage for rendered exports (GCS/S3). Required in production.
+  // ── S3-compatible object storage ─────────────────────────────────────────
+  // Required in production. Works with AWS S3, Cloudflare R2, MinIO, etc.
   STORAGE_BUCKET: z.string().min(1).optional(),
+  AWS_REGION: z.string().min(1).optional(),
+  AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  // Optional: set to e.g. https://<acct>.r2.cloudflarestorage.com for R2/MinIO
+  AWS_ENDPOINT_URL: z.string().url().optional(),
+  // Optional: CDN/public base URL prefix. When absent, presigned URLs are used.
+  STORAGE_PUBLIC_URL: z.string().url().optional(),
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Exact allowed browser origins (comma-separated). No wildcards in prod.
   CORS_ORIGINS: z.string().default(""),
@@ -43,14 +52,20 @@ export interface AppConfig {
   stripeSecretKey?: string;
   stripeWebhookSecret?: string;
   geminiApiKey?: string;
+  // Storage
   storageBucket?: string;
+  awsRegion?: string;
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  awsEndpointUrl?: string;
+  storagePublicUrl?: string;
+  // Misc
   corsOrigins: string[];
   firebaseProjectId?: string;
 }
 
 /**
  * In production the following are non-negotiable; their absence is a boot error.
- * This is the single most important behavioural change from the original.
  */
 const REQUIRED_IN_PROD: (keyof AppConfig)[] = [
   "databaseUrl",
@@ -58,6 +73,9 @@ const REQUIRED_IN_PROD: (keyof AppConfig)[] = [
   "stripeSecretKey",
   "stripeWebhookSecret",
   "storageBucket",
+  "awsRegion",
+  "awsAccessKeyId",
+  "awsSecretAccessKey",
 ];
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
@@ -80,6 +98,11 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     stripeWebhookSecret: e.STRIPE_WEBHOOK_SECRET,
     geminiApiKey: e.GEMINI_API_KEY,
     storageBucket: e.STORAGE_BUCKET,
+    awsRegion: e.AWS_REGION,
+    awsAccessKeyId: e.AWS_ACCESS_KEY_ID,
+    awsSecretAccessKey: e.AWS_SECRET_ACCESS_KEY,
+    awsEndpointUrl: e.AWS_ENDPOINT_URL,
+    storagePublicUrl: e.STORAGE_PUBLIC_URL,
     corsOrigins: e.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     firebaseProjectId: e.FIREBASE_PROJECT_ID,
   };
