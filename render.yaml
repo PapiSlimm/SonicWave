@@ -8,7 +8,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: oregon
-    plan: starter
+    plan: free
     branch: main
     healthCheckPath: /health/ready
 
@@ -52,11 +52,16 @@ services:
       - key: MIGRATE_SECRET
         sync: false
 
+  # Redis — must live under services:, not databases:
+  - type: redis
+    name: sonicwave-redis
+    plan: free
+    region: oregon
+    ipAllowList: []
+
 databases:
   - name: sonicwave-pg
-    plan: starter
+    plan: free
     databaseName: sonicwave
     user: sonicwave
-
-  - name: sonicwave-redis
-    plan: starter
+    region: oregon
