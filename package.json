@@ -9,8 +9,8 @@
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
     "test:smoke": "tsx --test tests/smoke.test.ts",
-    "typecheck": "tsc -p tsconfig.pure.json",
-    "migrate": "node -e \"console.log('run: psql $DATABASE_URL -f migrations/001_init.sql')\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "migrate": "tsx src/db/migrate.ts",
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs"
   },
   "keywords": [],
@@ -30,13 +30,17 @@
     "yjs": "^13.6.20",
     "@aws-sdk/client-s3": "^3.699.0",
     "@aws-sdk/lib-storage": "^3.699.0",
-    "@aws-sdk/s3-request-presigner": "^3.699.0"
+    "@aws-sdk/s3-request-presigner": "^3.699.0",
+    "uuid": "^9.0.1",
+    "busboy": "^1.6.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.24.0",
+    "@types/busboy": "^1.5.4",
+    "@types/pg": "^8.11.10"
   }
 }

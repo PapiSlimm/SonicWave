@@ -34,3 +34,26 @@ export async function runMigrations(db: Db, dir = "migrations"): Promise<void> {
     }
   }
 }
+
+// ─── Standalone entry-point ───────────────────────────────────────────────────
+// Run with: tsx src/db/migrate.ts
+// Or via:   npm run migrate
+if (import.meta.url === new URL(import.meta.url).href) {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("DATABASE_URL environment variable is not set");
+    process.exit(1);
+  }
+  import("./pg.js").then(async ({ createDb }) => {
+    const db = await createDb(url);
+    try {
+      await runMigrations(db);
+      console.log("All migrations applied.");
+    } finally {
+      await db.end();
+    }
+  }).catch((err) => {
+    console.error("Migration failed:", err);
+    process.exit(1);
+  });
+}

@@ -1,12 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
-    "lib": ["ES2022"], "strict": true, "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true, "allowImportingTsExtensions": true, "noEmit": true,
-    "types": ["node"]
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2022"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
   },
-  "files": [
-    "src/config/index.ts", "src/money.ts", "src/http/health.ts",
-    "src/security/socketAuth.ts", "src/billing/webhookHandler.ts", "src/audio/renderCommand.ts"
+  "include": [
+    "src/**/*",
+    "tests/**/*"
   ]
 }

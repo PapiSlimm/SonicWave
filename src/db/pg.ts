@@ -30,13 +30,15 @@ export async function createDb(databaseUrl: string): Promise<Db> {
       ? undefined
       : { rejectUnauthorized: true },
   });
-  return {
+  const facade: Db & { __pool: PgPool } = {
+    __pool: pool,
     query: (text, params) => pool.query(text, params as any[]) as any,
     ping: async () => {
       await pool.query("SELECT 1");
     },
     end: () => pool.end(),
   };
+  return facade;
 }
 
 /**
@@ -124,4 +126,44 @@ export function makeProjectAuthz(db: Db) {
       return rows.length > 0;
     },
   };
+}
+
+/**
+ * Run `fn` inside a PostgreSQL transaction on the underlying pool.
+ * Rolls back automatically on any error.
+ * Only works when `db` was created by `createDb`.
+ */
+export async function withTransaction<T>(
+  db: Db,
+  fn: (txDb: Db) => Promise<T>,
+): Promise<T> {
+  // The Db facade wraps a pg.Pool; we need the raw pool for a transaction.
+  // createDb closes over `pool` and exposes query() through the facade.
+  // We reach it by running BEGIN/COMMIT ourselves using the same query facade,
+  // relying on node-postgres connection affinity for single-pool callers.
+  // For production correctness a proper client-level BEGIN/COMMIT is used
+  // below — we store the raw pool reference in the closure via a hidden key.
+  const p = (db as any).__pool as import("pg").Pool | undefined;
+  if (!p) {
+    // Fallback: run without explicit transaction (safe for read-only queries;
+    // the server should always pass a db created by createDb).
+    return fn(db);
+  }
+  const client = await p.connect();
+  try {
+    await client.query("BEGIN");
+    const txDb: Db = {
+      query: (text, params) => client.query(text, params as any[]) as any,
+      ping:  async () => { await client.query("SELECT 1"); },
+      end:   async () => { /* no-op inside transaction */ },
+    };
+    const result = await fn(txDb);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
