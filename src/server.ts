@@ -123,7 +123,6 @@ async function main() {
     config,
     audioQueue,
     verifyToken,
-    applyPatch: applyStatePatch,
     stripe,
     logger,
   }));

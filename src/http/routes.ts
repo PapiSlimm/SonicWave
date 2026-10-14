@@ -45,19 +45,18 @@ export interface RouteDeps {
   db:           Db;
   storage:      S3Storage;
   audioQueue:   Queue;
-  aiQueue:      Queue;
-  stripe:       Stripe;
+  aiQueue?:     Queue;
+  stripe?:      Stripe;
   verifyToken:  VerifyTokenFn;
-  config: {
-    migrateSecret?: string;
-  };
+  config:       { migrateSecret?: string; [key: string]: unknown };
+  logger?:      { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
 }
 
 // ─── Upload Policy ────────────────────────────────────────────────────────────
 
 interface UploadPolicy { maxBytes: number; label: string; }
 
-const UPLOAD_POLICIES: Record<string, UploadPolicy> = {
+const UPLOAD_POLICIES: Record<string, UploadPolicy | undefined> = {
   "video/mp4":            { maxBytes: 2 * 1024 ** 3,   label: "video" },
   "video/quicktime":      { maxBytes: 2 * 1024 ** 3,   label: "video" },
   "video/webm":           { maxBytes: 2 * 1024 ** 3,   label: "video" },
@@ -420,7 +419,7 @@ export function createRoutes(deps: RouteDeps): Router {
   r.get("/api/jobs/:jobId", authenticate, async (req: Request, res: Response) => {
     try {
       const uid = req.user!.uid;
-      const job = await audioQueue.getJob(req.params.jobId);
+      const job = await audioQueue.getJob(req.params["jobId"] as string);
       if (!job) return res.status(404).json({ error: "not_found" });
       if (job.data?.uid !== uid) return res.status(403).json({ error: "forbidden" });
       res.json({

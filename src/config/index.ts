@@ -62,6 +62,7 @@ export interface AppConfig {
   // Misc
   corsOrigins: string[];
   firebaseProjectId?: string;
+  migrateSecret?: string;
 }
 
 /**
@@ -103,6 +104,7 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     awsSecretAccessKey: e.AWS_SECRET_ACCESS_KEY,
     awsEndpointUrl: e.AWS_ENDPOINT_URL,
     storagePublicUrl: e.STORAGE_PUBLIC_URL,
+    migrateSecret:  env.MIGRATE_SECRET,
     corsOrigins: e.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     firebaseProjectId: e.FIREBASE_PROJECT_ID,
   };
