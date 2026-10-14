@@ -97,7 +97,8 @@ const UPLOAD_POLICIES: Record<string, UploadPolicy> = {
 
 function getUploadPolicy(contentType: string): UploadPolicy | null {
   const mime = contentType.split(";")[0].trim().toLowerCase();
-  if (UPLOAD_POLICIES[mime]) return UPLOAD_POLICIES[mime];
+  const policy = UPLOAD_POLICIES[mime];
+  if (policy) return policy;
   if (mime.startsWith("audio/")) return { maxBytes: 500 * 1024 ** 2, label: "audio" };
   if (mime.startsWith("video/")) return { maxBytes: 2 * 1024 ** 3,   label: "video" };
   if (mime.startsWith("image/")) return { maxBytes: 100 * 1024 ** 2, label: "image" };
@@ -166,18 +167,18 @@ export function createRoutes(deps: RouteDeps): Router {
     try {
       const uid   = req.user!.uid;
       const authz = makeProjectAuthz(db);
-      const owner = await authz.getProjectOwner(req.params.id);
+      const owner = await authz.getProjectOwner((req.params["id"] as string));
       if (!owner) return res.status(404).json({ error: "not_found" });
       const isOwner = owner === uid;
-      const isCollab = !isOwner && await authz.isCollaborator(req.params.id, uid);
+      const isCollab = !isOwner && await authz.isCollaborator((req.params["id"] as string), uid);
       if (!isOwner && !isCollab) return res.status(403).json({ error: "forbidden" });
       const { rows: [state] } = await db.query(
         "SELECT version, state FROM project_states WHERE project_id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       const { rows: [project] } = await db.query(
         "SELECT id, name, bpm, is_public, created_at, updated_at FROM projects WHERE id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       res.json({ ...project, state: state?.state ?? null, version: state?.version ?? 0 });
     } catch (err: any) {
@@ -191,7 +192,7 @@ export function createRoutes(deps: RouteDeps): Router {
     express.json({ limit: "50mb" }),
     authenticate,
     async (req: Request, res: Response) => {
-      const projectId = req.params.id;
+      const projectId = (req.params["id"] as string);
       const uid       = req.user!.uid;
       try {
         const authz = makeProjectAuthz(db);
@@ -235,10 +236,10 @@ export function createRoutes(deps: RouteDeps): Router {
     try {
       const uid   = req.user!.uid;
       const authz = makeProjectAuthz(db);
-      const owner = await authz.getProjectOwner(req.params.id);
+      const owner = await authz.getProjectOwner((req.params["id"] as string));
       if (!owner) return res.status(404).json({ error: "not_found" });
       if (owner !== uid) return res.status(403).json({ error: "forbidden" });
-      await db.query("DELETE FROM projects WHERE id = $1", [req.params.id]);
+      await db.query("DELETE FROM projects WHERE id = $1", [(req.params["id"] as string)]);
       res.json({ success: true });
     } catch (err: any) {
       logger.error({ err }, "DELETE /api/projects/:id failed");
@@ -253,13 +254,13 @@ export function createRoutes(deps: RouteDeps): Router {
     try {
       const { rows: [project] } = await db.query(
         "SELECT id, name, bpm, is_public FROM projects WHERE id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       if (!project) return res.status(404).json({ error: "not_found" });
       if (!project.is_public) return res.status(403).json({ error: "forbidden" });
       const { rows: [state] } = await db.query(
         "SELECT state FROM project_states WHERE project_id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       res.json({ ...project, state: state?.state ?? null });
     } catch (err: any) {
@@ -274,21 +275,21 @@ export function createRoutes(deps: RouteDeps): Router {
       const uid  = req.user!.uid;
       const { rows: [src] } = await db.query(
         "SELECT id, name, bpm, is_public, user_id FROM projects WHERE id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       if (!src) return res.status(404).json({ error: "not_found" });
 
       // Visibility check: source must be public or requester must be owner/collab.
       const authz    = makeProjectAuthz(db);
       const isOwner  = src.user_id === uid;
-      const isCollab = !isOwner && await authz.isCollaborator(req.params.id, uid);
+      const isCollab = !isOwner && await authz.isCollaborator((req.params["id"] as string), uid);
       if (!src.is_public && !isOwner && !isCollab) {
         return res.status(403).json({ error: "forbidden" });
       }
 
       const { rows: [srcState] } = await db.query(
         "SELECT state, ydoc FROM project_states WHERE project_id = $1",
-        [req.params.id],
+        [(req.params["id"] as string)],
       );
       const newId = uuidv4();
       await db.query(
@@ -455,8 +456,8 @@ export function createRoutes(deps: RouteDeps): Router {
         payment_method_types: ["card"],
         line_items: [{ price: priceId, quantity: 1 }],
         mode: "subscription",
-        success_url: `${req.headers.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url:  `${req.headers.origin}/billing/cancel`,
+        success_url: `${(req.headers["origin"] as string | undefined) ?? ""}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:  `${(req.headers["origin"] as string | undefined) ?? ""}/billing/cancel`,
         client_reference_id: req.user!.uid,
       });
       res.json({ url: session.url });

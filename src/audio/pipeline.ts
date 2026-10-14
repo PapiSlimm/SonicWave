@@ -111,7 +111,7 @@ export async function spawnFfmpegPipeline(
     if (input.durationSecs) {
       const m = /time=(\d{2}):(\d{2}):(\d{2}\.\d+)/.exec(chunk.toString());
       if (m) {
-        const secs = +m[1] * 3600 + +m[2] * 60 + parseFloat(m[3]);
+        const secs = +(m[1] ?? "0") * 3600 + +(m[2] ?? "0") * 60 + parseFloat(m[3] ?? "0");
         const pct = Math.min(100, Math.round((secs / input.durationSecs) * 100));
         ffProc.emit("progress", pct);
       }
