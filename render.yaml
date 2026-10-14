@@ -1,6 +1,7 @@
 # render.yaml — SonicWave deployment on Render.com
-# Commit this file to the PapiSlimm/SonicWave repo.
-# Render auto-detects it and creates/updates the service on push.
+# Commit this file to the PapiSlimm/SonicWave repo as render.yaml (replace the old one).
+# Fixes vs the previous file: Postgres plan "starter" is legacy → "0.1c-256mb"; Redis is not a database —
+# it is a service of type keyvalue (Render Key Value) with a required ipAllowList.
 
 services:
   - type: web
@@ -8,29 +9,20 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: oregon
-    plan: free
+    plan: starter
     branch: main
     healthCheckPath: /health/ready
-
     envVars:
       - key: NODE_ENV
         value: production
-
-      # Render injects PORT automatically; app reads process.env.PORT
-      # DATABASE_URL linked from the Render Postgres instance below
+      # Render injects PORT automatically; the app reads process.env.PORT
       - key: DATABASE_URL
         fromDatabase:
           name: sonicwave-pg
           property: connectionString
-
-      # REDIS_URL linked from the Render Redis instance below
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: sonicwave-redis
-          property: connectionString
-
-      # Set these manually in the Render dashboard (do not commit real keys)
+        sync: false  # set manually in Render dashboard — reuse your existing free Key Value
+      # Set these in the Render dashboard (never commit real keys)
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -52,16 +44,12 @@ services:
       - key: MIGRATE_SECRET
         sync: false
 
-  # Redis — must live under services:, not databases:
-  - type: redis
-    name: sonicwave-redis
-    plan: free
-    region: oregon
-    ipAllowList: []
+  # Key Value service removed — account already has 1 free Key Value instance (Render limit).
+  # Set REDIS_URL manually in the Render dashboard env vars.
 
 databases:
   - name: sonicwave-pg
-    plan: free
+    region: oregon
+    plan: 0.1c-256mb      # smallest paid non-legacy plan; "free" expires after 30 days
     databaseName: sonicwave
     user: sonicwave
-    region: oregon
