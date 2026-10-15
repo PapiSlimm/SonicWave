@@ -1,3 +1,4 @@
+import type { LogObj } from "../lib/logger.js";
 /**
  * Stripe webhook handler — the fix for "real checkout but no webhook, so paid
  * status is never persisted."
@@ -33,7 +34,7 @@ export interface WebhookDeps {
   resolveUid: (args: { customerId?: string; clientReferenceId?: string | null }) => Promise<string | null>;
   /** Map a Stripe price id -> our plan. */
   planForPrice: (priceId: string) => Plan;
-  logger: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void };
+  logger: { info: (o: LogObj, m?: string) => void; warn: (o: LogObj, m?: string) => void };
 }
 
 export interface HandleResult {

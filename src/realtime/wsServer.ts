@@ -1,3 +1,4 @@
+import type { LogObj } from "../lib/logger.js";
 /**
  * Production collaboration gateway — full rewrite of the original wsServer.ts.
  *
@@ -19,7 +20,7 @@ import * as Y from "yjs";
 import { authorizeSocket, type AuthorizeDeps } from "../security/socketAuth.ts";
 
 export interface GatewayDeps extends AuthorizeDeps {
-  logger: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
+  logger: { info: (o: LogObj, m?: string) => void; warn: (o: LogObj, m?: string) => void; error: (o: LogObj, m?: string) => void };
   /** Load the persisted Y.Doc update for a project (or null if none yet). */
   loadDocUpdate: (projectId: string) => Promise<Uint8Array | null>;
   /** Persist the full Y.Doc update for a project (debounced by caller). */

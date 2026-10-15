@@ -37,7 +37,7 @@ import type { S3Storage } from "../storage/s3.js";
 import type { Queue } from "bullmq";
 import type { VerifyTokenFn } from "../middleware/auth.js";
 import { makeAuthMiddleware } from "../middleware/auth.js";
-import { logger } from "../lib/logger.js";
+import { logger, type LogObj } from "../lib/logger.js";
 
 // ─── Dependency-injection contract ───────────────────────────────────────────
 
@@ -49,7 +49,7 @@ export interface RouteDeps {
   stripe?:      Stripe;
   verifyToken:  VerifyTokenFn;
   config:       { migrateSecret?: string };
-  logger?:      { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
+  logger?:      { info: (o: LogObj, m?: string) => void; warn: (o: LogObj, m?: string) => void; error: (o: LogObj, m?: string) => void };
 }
 
 // ─── Upload Policy ────────────────────────────────────────────────────────────

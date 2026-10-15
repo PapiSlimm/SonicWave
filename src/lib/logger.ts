@@ -2,7 +2,7 @@
  * Minimal structured logger (pino-compatible call shape, zero dependencies).
  * server.ts and every module call logger.info(obj, msg) / logger.error(obj, msg).
  */
-type LogObj = Record<string, unknown> | string;
+export type LogObj = Record<string, unknown> | string;
 
 function line(level: string, o: LogObj, msg?: string) {
   const base = typeof o === "string" ? { msg: o } : { ...o, msg: msg ?? (o as any).msg };
