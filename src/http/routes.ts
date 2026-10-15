@@ -95,7 +95,7 @@ const UPLOAD_POLICIES: Record<string, UploadPolicy | undefined> = {
 };
 
 function getUploadPolicy(contentType: string): UploadPolicy | null {
-  const mime = contentType.split(";")[0].trim().toLowerCase();
+  const mime = (contentType.split(";")[0] ?? contentType).trim().toLowerCase();
   const policy: UploadPolicy | undefined = UPLOAD_POLICIES[mime];
   if (policy !== undefined) return policy;
   if (mime.startsWith("audio/")) return { maxBytes: 500 * 1024 ** 2, label: "audio" };
