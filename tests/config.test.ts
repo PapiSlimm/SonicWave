@@ -30,6 +30,9 @@ test("production rejects wildcard CORS", () => {
         STRIPE_SECRET_KEY: "sk_live_x",
         STRIPE_WEBHOOK_SECRET: "whsec_x",
         STORAGE_BUCKET: "b",
+        AWS_REGION: "us-east-1",
+        AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE",
+        AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         CORS_ORIGINS: "*",
       }),
     /Wildcard CORS/,
@@ -44,6 +47,9 @@ test("fully configured production boots", () => {
     STRIPE_SECRET_KEY: "sk_live_x",
     STRIPE_WEBHOOK_SECRET: "whsec_x",
     STORAGE_BUCKET: "b",
+    AWS_REGION: "us-east-1",
+    AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE",
+    AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     CORS_ORIGINS: "https://app.v12.com, https://studio.v12.com",
   });
   assert.equal(cfg.isProduction, true);
