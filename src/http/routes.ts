@@ -48,8 +48,8 @@ export interface RouteDeps {
   aiQueue?:     Queue;
   stripe?:      Stripe;
   verifyToken:  VerifyTokenFn;
-  config:       { migrateSecret?: string; [key: string]: unknown };
-  logger?:      { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
+  config:       { migrateSecret?: string };
+  logger?:      { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
 }
 
 // ─── Upload Policy ────────────────────────────────────────────────────────────
@@ -435,6 +435,7 @@ export function createRoutes(deps: RouteDeps): Router {
   });
 
   r.post("/api/jobs/ai", authenticate, async (req: Request, res: Response) => {
+    if (!aiQueue) return res.status(503).json({ error: "ai_queue_not_configured" });
     try {
       const uid = req.user!.uid;
       const job = await aiQueue.add("ai-generate", { uid, ...req.body });
@@ -449,6 +450,7 @@ export function createRoutes(deps: RouteDeps): Router {
 
   r.post("/api/billing/create-checkout", authenticate, async (req: Request, res: Response) => {
     try {
+      if (!stripe) return res.status(503).json({ error: "stripe_not_configured" });
       const { priceId } = req.body ?? {};
       if (!priceId) return res.status(400).json({ error: "priceId required" });
       const session = await stripe.checkout.sessions.create({
@@ -475,6 +477,7 @@ export function createRoutes(deps: RouteDeps): Router {
         [uid],
       );
       if (!ent?.stripe_customer_id) return res.json({ plan: ent?.plan ?? "FREE" });
+      if (!stripe) return res.status(503).json({ error: "stripe_not_configured" });
       const subs = await stripe.subscriptions.list({
         customer: ent.stripe_customer_id, status: "active", limit: 1,
       });
@@ -490,6 +493,7 @@ export function createRoutes(deps: RouteDeps): Router {
     "/api/billing/webhook",
     express.raw({ type: "application/json" }),
     async (req: Request, res: Response) => {
+      if (!stripe) return res.status(503).json({ error: "stripe_not_configured" });
       const sig    = req.headers["stripe-signature"] as string;
       const secret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
       let event: any;

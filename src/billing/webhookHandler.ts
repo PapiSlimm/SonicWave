@@ -33,7 +33,7 @@ export interface WebhookDeps {
   resolveUid: (args: { customerId?: string; clientReferenceId?: string | null }) => Promise<string | null>;
   /** Map a Stripe price id -> our plan. */
   planForPrice: (priceId: string) => Plan;
-  logger: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void };
+  logger: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void };
 }
 
 export interface HandleResult {
